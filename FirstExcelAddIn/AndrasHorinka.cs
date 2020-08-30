@@ -13,12 +13,12 @@ namespace FirstExcelAddIn
         private void button1_Click(object sender, RibbonControlEventArgs e)
         {
 
-            Globals.ThisAddIn.RetrieveDataFromMNB();
+            Globals.ThisExcelAddIn.RetrieveDataFromMNB();
         }
 
         private void button2_Click(object sender, RibbonControlEventArgs e)
         {
-            Globals.ThisAddIn.LogReasonForQuery();
+            Globals.ThisExcelAddIn.LogReasonForQuery();
         }
     }
 }

@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
-
-namespace FirstExcelAddIn.Models
+﻿namespace FirstExcelAddIn.Models
 {
+    using System.Collections.Generic;
+
     public class CurrencyWrapper
     {
         public string CurrencyName { get; set; }

@@ -4,20 +4,35 @@
     using System.Collections.Generic;
     using System.Linq;
     using Excel = Microsoft.Office.Interop.Excel;
-    using www.mnb.hu.webservices;
     using System.ServiceModel;
     using System.Xml;
     using System.Windows.Forms;
     using Microsoft.Office.Interop.Excel;
+    using System.IO;
+
+    using www.mnb.hu.webservices;
 
     using FirstExcelAddIn.Models;
+    using AccessAddIn;
 
-    public partial class ThisAddIn
+    public partial class ThisExcelAddIn
     {
-        private MNBArfolyamServiceSoapClient client;
-        private IList<CurrencyWrapper> CurrenciesRetrieved { get; set; }
-        private IList<FxDateWrapper> CurrencySnapshotDate { get; set; }
+        #region Fields
 
+        private MNBArfolyamServiceSoapClient client;
+        private DateTime startDate = new DateTime(2015, 1, 1);
+        private DateTime endDate = new DateTime(2020, 4, 1);
+        private string accessDbPath;
+        private IList<CurrencyWrapper> currenciesRetrieved;
+        private IList<FxDateWrapper> currencySnapshotDate;
+        private FileInfo accessDbFile;
+        private AccessAddIn AccessAddIn;
+
+        #endregion
+
+        #region Constants
+
+        private const string ACCESS_DB_FILE_NAME = "MNBQueries.accdb";
         private const int ROW_OFFSET_FOR_DATES = 3;
         private const int COLUMN_OFFSET_FOR_CURRENCIES = 2;
         private const string MNB_DATE_ATTRIBUTE_NAME = "date";
@@ -29,15 +44,19 @@
         private const string DATE_OUTPUT_FORMAT = "yyyy.MM.dd.";
         private const string MNB_ENDPOINT_ADDRESS = "http://www.mnb.hu/arfolyamok.asmx";
 
-        private DateTime startDate = new DateTime(2015, 1, 1);
-        private DateTime endDate = new DateTime(2020, 4, 1);
+        #endregion
+
+        #region VSTO methods
 
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
+            // Ensure access DB file is found
+            EnsureAccessDbFile();
+
             // Upon running Excel - Open a blank new Workbook
             this.Application.Workbooks.Add();
 
-            // Initialize the client
+            // Initialize the MNB client
             var binding = new BasicHttpBinding();
             binding.MaxReceivedMessageSize = Int32.MaxValue;
             binding.MaxBufferSize = Int32.MaxValue;
@@ -50,6 +69,8 @@
             client.Close();
         }
 
+        #endregion
+
         #region MNB Excel Methods
 
         /// <summary>
@@ -57,8 +78,8 @@
         /// </summary>
         public void RetrieveDataFromMNB()
         {
-            CurrenciesRetrieved = new List<CurrencyWrapper>();
-            CurrencySnapshotDate = new List<FxDateWrapper>();
+            currenciesRetrieved = new List<CurrencyWrapper>();
+            currencySnapshotDate = new List<FxDateWrapper>();
 
             // Rename the active worksheet to the current date
             Excel.Worksheet activeWorksheet = ((Excel.Worksheet)Application.ActiveSheet);
@@ -111,10 +132,10 @@
                         CurrencyName = node.InnerText
                     };
 
-                    bool currencyAlreadyPresent = CurrenciesRetrieved.Any(curr => curr.CurrencyName == node.InnerText);
+                    bool currencyAlreadyPresent = currenciesRetrieved.Any(curr => curr.CurrencyName == node.InnerText);
                     if (!currencyAlreadyPresent)
                     {
-                        CurrenciesRetrieved.Add(currencyWrapper);
+                        currenciesRetrieved.Add(currencyWrapper);
                     }
                 }
             }
@@ -137,7 +158,7 @@
         /// </summary>
         private void GetAndProcessExchangeRates()
         {
-            GetAndProcessExchangeRates(startDate, endDate, CurrenciesRetrieved.Select(name => name.CurrencyName).ToList());
+            GetAndProcessExchangeRates(startDate, endDate, currenciesRetrieved.Select(name => name.CurrencyName).ToList());
         }
 
         /// <summary>
@@ -175,14 +196,14 @@
                     DateTime.TryParse(rawDate.Value, out DateTime date);
 
                     // check if date is not included
-                    var dateIsAlreadyAdded = CurrencySnapshotDate.Any(item => item.Date == date);
+                    var dateIsAlreadyAdded = currencySnapshotDate.Any(item => item.Date == date);
                     if (!dateIsAlreadyAdded)
                     {
                         var newFxDate = new FxDateWrapper()
                         {
                             Date = date,
                         };
-                        CurrencySnapshotDate.Add(newFxDate);
+                        currencySnapshotDate.Add(newFxDate);
                     }
 
                     // Iterate through child nodes and retrieve the unit and curr from attributes - and fx rate from innerText
@@ -190,7 +211,7 @@
                     {
                         // Find currency by name
                         XmlNode currAttrib = currencyRate.Attributes.GetNamedItem(MNB_CURRENCY_ATTRIBUTE_NAME);
-                        var currencyWrapper = CurrenciesRetrieved.FirstOrDefault(currName => currName.CurrencyName.Equals(currAttrib.Value, StringComparison.InvariantCultureIgnoreCase));
+                        var currencyWrapper = currenciesRetrieved.FirstOrDefault(currName => currName.CurrencyName.Equals(currAttrib.Value, StringComparison.InvariantCultureIgnoreCase));
 
                         if (currencyWrapper is null) continue;
 
@@ -223,14 +244,14 @@
         /// <param name="activeWorksheet">Excel:Worksheet: worksheet where the data gets copied</param>
         private void PrintCurrenciesHeader(Excel.Worksheet activeWorksheet)
         {
-            Excel.Range currencyHeader = activeWorksheet.Range[activeWorksheet.Cells[1, COLUMN_OFFSET_FOR_CURRENCIES], activeWorksheet.Cells[2, CurrenciesRetrieved.Count + COLUMN_OFFSET_FOR_CURRENCIES - 1]];
+            Excel.Range currencyHeader = activeWorksheet.Range[activeWorksheet.Cells[1, COLUMN_OFFSET_FOR_CURRENCIES], activeWorksheet.Cells[2, currenciesRetrieved.Count + COLUMN_OFFSET_FOR_CURRENCIES - 1]];
 
-            string[,] values = new string[2, CurrenciesRetrieved.Count];
-            for (int i = 0; i < CurrenciesRetrieved.Count; i++)
+            string[,] values = new string[2, currenciesRetrieved.Count];
+            for (int i = 0; i < currenciesRetrieved.Count; i++)
             {
-                values[0,i] = CurrenciesRetrieved[i].CurrencyName;
-                values[1, i] = CurrenciesRetrieved[i].RateUnit.ToString();
-                CurrenciesRetrieved[i].ColumnReference = i + COLUMN_OFFSET_FOR_CURRENCIES;
+                values[0,i] = currenciesRetrieved[i].CurrencyName;
+                values[1, i] = currenciesRetrieved[i].RateUnit.ToString();
+                currenciesRetrieved[i].ColumnReference = i + COLUMN_OFFSET_FOR_CURRENCIES;
             }
 
             currencyHeader.Value = values;
@@ -243,15 +264,15 @@
         private void PrintFxRateDateRangeHeader(Excel.Worksheet activeWorksheet)
         {
             
-            CurrencySnapshotDate.OrderBy(srt => srt.Date);
-            Excel.Range dateRange = activeWorksheet.Range[activeWorksheet.Cells[ROW_OFFSET_FOR_DATES, 1], activeWorksheet.Cells[CurrencySnapshotDate.Count - 1 + ROW_OFFSET_FOR_DATES, 1]];
+            currencySnapshotDate.OrderBy(srt => srt.Date);
+            Excel.Range dateRange = activeWorksheet.Range[activeWorksheet.Cells[ROW_OFFSET_FOR_DATES, 1], activeWorksheet.Cells[currencySnapshotDate.Count - 1 + ROW_OFFSET_FOR_DATES, 1]];
 
-            string[,] values = new string[CurrencySnapshotDate.Count, 1];
+            string[,] values = new string[currencySnapshotDate.Count, 1];
 
-            for (int i = 0; i < CurrencySnapshotDate.Count; i++)
+            for (int i = 0; i < currencySnapshotDate.Count; i++)
             {
-                values[i, 0] = CurrencySnapshotDate[i].Date.ToString(DATE_OUTPUT_FORMAT);
-                CurrencySnapshotDate[i].RowReferece = i + ROW_OFFSET_FOR_DATES;
+                values[i, 0] = currencySnapshotDate[i].Date.ToString(DATE_OUTPUT_FORMAT);
+                currencySnapshotDate[i].RowReferece = i + ROW_OFFSET_FOR_DATES;
             }
         
             dateRange.Value = values;
@@ -265,11 +286,11 @@
         /// <param name="activeWorksheet">Excel:Worksheet: worksheet where the data gets copied</param>
         private void PrintFxRates(Excel.Worksheet activeWorksheet)
         {
-            foreach (CurrencyWrapper currencyWrapper in CurrenciesRetrieved)
+            foreach (CurrencyWrapper currencyWrapper in currenciesRetrieved)
             {
                 foreach (Currency currency in currencyWrapper.CurrencyRates)
                 {
-                    FxDateWrapper currencySnapshotRef = CurrencySnapshotDate.FirstOrDefault(x => x.Date == currency.Date);
+                    FxDateWrapper currencySnapshotRef = currencySnapshotDate.FirstOrDefault(x => x.Date == currency.Date);
 
                     Excel.Range fxCellReference = activeWorksheet.Cells[currencySnapshotRef.RowReferece, currencyWrapper.ColumnReference];
                     var normRawRate = currency.RawRate.Replace(',', '.');
@@ -284,16 +305,45 @@
         #region Access Methods
 
         /// <summary>
+        /// After pressing MNB Adatletoltes, store the windows user id + timestamp
+        /// </summary>
+        private void LogQueryInDb()
+        {
+
+        }
+
+        /// When pressing Log button on Ribbon - show the content of the access db and provide an option to edit the log field
+        /// <summary>
         /// Method being called when user clicks the button on the ribbon to give reasoning on the query
         /// </summary>
         public void LogReasonForQuery()
         {
-
+           
         }
 
         #endregion
 
         #region Helper methods
+
+        /// <summary>
+        /// Validates if Access db file exists already. If not it warns the user and generates an Access Db File.
+        /// </summary>
+        private void EnsureAccessDbFile()
+        {
+            var fullPath = Path.Combine(Directory.GetCurrentDirectory(), ACCESS_DB_FILE_NAME);
+            accessDbFile = new FileInfo(fullPath);
+
+            if (!accessDbFile.Exists)
+            {
+                CreateAccessDbFile();
+                ShowErrorMessage($"Database file was not found at {accessDbFile.FullName.ToUpper()}. \nA new access DB file was created at above location");
+            }
+        }
+
+        private void CreateAccessDbFile()
+        {
+
+        }
 
         /// <summary>
         /// Pops up a MessageBox with given error message.

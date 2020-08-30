@@ -1,7 +1,7 @@
-﻿using System;
-
-namespace FirstExcelAddIn.Models
+﻿namespace FirstExcelAddIn.Models
 {
+    using System;
+
     public class FxDateWrapper
     {
         public DateTime Date { get; set; }

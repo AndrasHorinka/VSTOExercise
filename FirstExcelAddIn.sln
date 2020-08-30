@@ -5,6 +5,8 @@ VisualStudioVersion = 15.0.28307.1231
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FirstExcelAddIn", "FirstExcelAddIn\FirstExcelAddIn.csproj", "{A102522E-EB2E-4AFE-869A-2A478B7B1EE5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AccessAddIn", "AccessAddIn\AccessAddIn.csproj", "{A914DACC-8333-41AD-9B5B-8904EBC87207}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{A102522E-EB2E-4AFE-869A-2A478B7B1EE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A102522E-EB2E-4AFE-869A-2A478B7B1EE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A102522E-EB2E-4AFE-869A-2A478B7B1EE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A914DACC-8333-41AD-9B5B-8904EBC87207}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A914DACC-8333-41AD-9B5B-8904EBC87207}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A914DACC-8333-41AD-9B5B-8904EBC87207}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A914DACC-8333-41AD-9B5B-8904EBC87207}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
